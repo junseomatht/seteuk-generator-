@@ -156,14 +156,25 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
         "6. 학생을 지칭할 때 '급우', '친구들' 같은 표현은 쓰지 말 것. 필요하면 '학급 구성원', '모둠원' 등으로 표현.",
     ]
     
-    # 문체 프로필 추가
-    if style_profile:
+    # 내 작성 방식 추가 (예시 기반 - 가장 강력)
+    my_examples = project.get('my_examples', '').strip()
+    my_rules = project.get('my_rules', '').strip()
+    
+    if my_examples:
         prompt_parts.extend([
             "",
-            "## 문체 프로필",
-            f"어조: {', '.join(style_profile.get('tone', []))}",
-            f"자주 쓰는 표현: {', '.join(style_profile.get('frequent_expressions', []))}",
-            f"패턴: {style_profile.get('sentence_pattern', '')}",
+            "## ★★ 따라야 할 작성 스타일 (이 선생님이 직접 쓴 실제 세특 예시)",
+            "아래는 이 선생님이 직접 작성한 세특이야. 이 말투, 문장 구조, 끝맺음, 서술 순서를 그대로 모방해서 써줘.",
+            "내용은 학생에 맞게 새로 쓰되, '쓰는 방식'은 아래 예시와 똑같이 느껴지도록 할 것.",
+            "",
+            my_examples,
+        ])
+    
+    if my_rules:
+        prompt_parts.extend([
+            "",
+            "## ★ 이 선생님의 작성 규칙 (반드시 지킬 것)",
+            my_rules,
         ])
     
     # 학교 규정 추가
@@ -431,48 +442,38 @@ if st.session_state.current_project is not None:
     
     # Step 2: 문체 학습
     elif current_step == 2:
-        st.markdown("## 📚 2단계: 문체 학습")
+        st.markdown("## 📚 2단계: 내 작성 방식 등록")
+        st.caption("선생님만의 세특 작성 방식을 알려주면, AI가 그 방식을 따라 씁니다. (선택사항이지만 강력 추천)")
         
-        style_mode = st.radio(
-            "문체 모드 선택",
-            ["🔷 기본 모드", "🟦 학교 표준형", "🟦 내 문체 학습 (권장!)"],
-            help="내 문체 학습: 작년 세특 10개 이상 업로드하면 더 좋은 결과!"
+        st.markdown("### ✍️ 1) 내 세특 예시")
+        st.info("예전에 직접 쓰신 세특 2~3개를 붙여넣으세요. AI가 이 말투와 구조를 그대로 따라 씁니다. (가장 효과 큼)")
+        
+        my_examples = st.text_area(
+            "내 세특 예시 (여러 개면 줄바꿈으로 구분)",
+            value=proj.get('my_examples', ''),
+            height=180,
+            placeholder="예시)\n소인수분해 단원에서 합성수를 소수의 곱으로 표현하는 원리를 정확히 이해하고, 이를 다양한 문제에 능숙하게 적용함. 풀이 과정을 논리적으로 설명하는 태도가 돋보임.\n\n정수와 유리수의 사칙연산에서 음수 개념을 명확히 파악하고, 연산 규칙을 정확하게 적용하여 복잡한 계산도 끝까지 정확히 해결함."
         )
         
-        if "내 문체 학습" in style_mode:
-            st.markdown("### 기존 세특 업로드")
-            st.info("같은 교과의 기존 세특 10개 이상을 업로드하세요")
-            
-            uploaded_file = st.file_uploader("파일 선택 또는 드래그", type=["csv", "txt"])
-            
-            if uploaded_file is not None:
-                st.markdown("### 📊 분석 중...")
-                progress_bar = st.progress(0)
-                
-                # 파일 읽기
-                content = uploaded_file.read().decode('utf-8')
-                
-                # Claude 분석
-                with st.spinner("문체 분석 중..."):
-                    style_result = analyze_style(content)
-                
-                progress_bar.progress(100)
-                
-                if style_result:
-                    st.markdown("### ✅ 분석 완료!")
-                    
-                    st.json(style_result)
-                    
-                    proj['style_profile'] = style_result
-                    
-                    if st.button("✨ 이 문체로 적용"):
-                        proj['step'] = 3
-                        st.rerun()
-        else:
-            st.info("기본 문체를 사용합니다")
-            if st.button("➡️ 다음 단계로"):
-                proj['step'] = 3
-                st.rerun()
+        st.markdown("### 📋 2) 내 작성 규칙")
+        st.info("본인만의 원칙이 있으면 자유롭게 적으세요. 없으면 비워둬도 됩니다.")
+        
+        my_rules = st.text_area(
+            "내 작성 규칙 (자유롭게)",
+            value=proj.get('my_rules', ''),
+            height=120,
+            placeholder="예시)\n- 문장은 '~함' 체로 끝낸다\n- 학업 역량을 먼저 쓰고 태도를 뒤에 쓴다\n- 구체적인 활동 사례를 반드시 하나 포함한다\n- 한 가지 활동을 깊게 서술한다"
+        )
+        
+        proj['my_examples'] = my_examples
+        proj['my_rules'] = my_rules
+        
+        if my_examples.strip() or my_rules.strip():
+            st.success("✅ 작성 방식이 등록되었습니다. 이 방식대로 세특이 생성됩니다.")
+        
+        if st.button("➡️ 다음 단계로"):
+            proj['step'] = 3
+            st.rerun()
     
     # Step 3: 규정 설정
     elif current_step == 3:
@@ -621,7 +622,7 @@ if st.session_state.current_project is not None:
             st.markdown("### 📊 생성 준비")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("학생 수", len(proj.get('students', [])))
-            col2.metric("문체", "학습됨" if proj.get('style_profile') else "기본")
+            col2.metric("작성방식", "등록됨" if (proj.get('my_examples','').strip() or proj.get('my_rules','').strip()) else "기본")
             col3.metric("규정", "설정됨" if proj.get('school_rules') else "미설정")
             col4.metric("목표", f"{proj.get('unit_target_bytes') or proj.get('target_bytes')}B")
         
@@ -639,7 +640,6 @@ if st.session_state.current_project is not None:
                 # 세특 생성
                 seteuk = generate_seteuk(
                     proj,
-                    style_profile=proj.get('style_profile'),
                     school_rules=proj.get('school_rules'),
                     student_info=student
                 )
