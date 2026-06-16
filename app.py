@@ -707,14 +707,64 @@ if st.session_state.current_project is not None:
                 for warning in forbidden_warnings:
                     st.warning(f"{warning['student']}: {', '.join(warning['words'])} 포함")
             
-            st.markdown("### ✅ 생성된 세특 미리보기")
+            st.success(f"✅ 총 {len(results)}명의 세특이 생성되었습니다!")
+        
+        # 생성된 결과가 있으면 항상 표시 (다운로드 포함)
+        if proj.get('results'):
+            results = proj['results']
             
-            for i, result in enumerate(results[:3]):  # 처음 3개만 표시
-                with st.expander(f"{result['student']} - {result['level']} ({result['bytes']}B)"):
-                    st.write(result['seteuk'])
+            st.divider()
+            st.markdown("### 📥 결과 다운로드")
             
-            if len(results) > 3:
-                st.info(f"외 {len(results) - 3}명의 세특이 생성되었습니다.")
+            # 표 형태로 정리
+            import pandas as pd
+            download_df = pd.DataFrame([
+                {
+                    "번호": idx + 1,
+                    "이름": r['student'],
+                    "수준": r['level'],
+                    "세특": r['seteuk'],
+                    "바이트": r['bytes']
+                }
+                for idx, r in enumerate(results)
+            ])
+            
+            col_dl1, col_dl2 = st.columns(2)
+            
+            # 엑셀 다운로드
+            with col_dl1:
+                try:
+                    import io
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        download_df.to_excel(writer, index=False, sheet_name='세특')
+                    buffer.seek(0)
+                    
+                    file_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.xlsx"
+                    st.download_button(
+                        label="📊 엑셀(.xlsx)로 다운로드",
+                        data=buffer,
+                        file_name=file_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"엑셀 생성 오류: {e}")
+            
+            # CSV 다운로드
+            with col_dl2:
+                csv_data = download_df.to_csv(index=False).encode('utf-8-sig')
+                csv_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.csv"
+                st.download_button(
+                    label="📄 CSV로 다운로드",
+                    data=csv_data,
+                    file_name=csv_name,
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            st.markdown("### 📋 생성된 세특 전체 보기")
+            st.dataframe(download_df, use_container_width=True, height=400)
 
 st.divider()
 
