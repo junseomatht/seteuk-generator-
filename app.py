@@ -403,373 +403,379 @@ elif menu == "⚙️ 설정":
 # ==========================================
 
 if st.session_state.current_project is not None:
-    st.divider()
+    # 유효한 프로젝트 번호인지 확인 (삭제 등으로 범위를 벗어나면 초기화)
+    if (not st.session_state.projects or 
+            st.session_state.current_project < 0 or 
+            st.session_state.current_project >= len(st.session_state.projects)):
+        st.session_state.current_project = None
+    else:
+        st.divider()
+        
+        proj = st.session_state.projects[st.session_state.current_project]
     
-    proj = st.session_state.projects[st.session_state.current_project]
+        st.markdown(f"## 📝 {proj['subject']} {proj['grade']} {proj['classes']}")
     
-    st.markdown(f"## 📝 {proj['subject']} {proj['grade']} {proj['classes']}")
+        # 진행도 표시
+        progress_steps = ["기본정보", "문체학습", "규정설정", "학생정보", "단원정보", "세특생성"]
+        current_step = proj.get('step', 1)
     
-    # 진행도 표시
-    progress_steps = ["기본정보", "문체학습", "규정설정", "학생정보", "단원정보", "세특생성"]
-    current_step = proj.get('step', 1)
+        progress_cols = st.columns(len(progress_steps))
+        for i, step_name in enumerate(progress_steps):
+            with progress_cols[i]:
+                if i < current_step:
+                    st.markdown(f"✅ {step_name}")
+                elif i == current_step - 1:
+                    st.markdown(f"▶️ **{step_name}**")
+                else:
+                    st.markdown(f"⭕ {step_name}")
     
-    progress_cols = st.columns(len(progress_steps))
-    for i, step_name in enumerate(progress_steps):
-        with progress_cols[i]:
-            if i < current_step:
-                st.markdown(f"✅ {step_name}")
-            elif i == current_step - 1:
-                st.markdown(f"▶️ **{step_name}**")
-            else:
-                st.markdown(f"⭕ {step_name}")
+        st.divider()
     
-    st.divider()
-    
-    # Step 1: 기본정보 (이미 완료)
-    if current_step == 1:
-        st.markdown("## ✅ 1단계: 기본 정보 (완료)")
+        # Step 1: 기본정보 (이미 완료)
+        if current_step == 1:
+            st.markdown("## ✅ 1단계: 기본 정보 (완료)")
         
-        with st.container(border=True):
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("교과", proj['subject'])
-            col2.metric("학년", proj['grade'])
-            col3.metric("반", proj['classes'])
-            col4.metric("학생수", proj['students_per_class'] * proj['classes'].rstrip('반'))
+            with st.container(border=True):
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("교과", proj['subject'])
+                col2.metric("학년", proj['grade'])
+                col3.metric("반", proj['classes'])
+                col4.metric("학생수", proj['students_per_class'] * proj['classes'].rstrip('반'))
         
-        if st.button("➡️ 다음 단계로"):
-            proj['step'] = 2
-            st.rerun()
-    
-    # Step 2: 문체 학습
-    elif current_step == 2:
-        st.markdown("## 📚 2단계: 내 작성 방식 등록")
-        st.caption("선생님만의 세특 작성 방식을 알려주면, AI가 그 방식을 따라 씁니다. (선택사항이지만 강력 추천)")
-        
-        st.markdown("### ✍️ 1) 내 세특 예시")
-        st.info("예전에 직접 쓰신 세특 2~3개를 붙여넣으세요. AI가 이 말투와 구조를 그대로 따라 씁니다. (가장 효과 큼)")
-        
-        my_examples = st.text_area(
-            "내 세특 예시 (여러 개면 줄바꿈으로 구분)",
-            value=proj.get('my_examples', ''),
-            height=180,
-            placeholder="예시)\n소인수분해 단원에서 합성수를 소수의 곱으로 표현하는 원리를 정확히 이해하고, 이를 다양한 문제에 능숙하게 적용함. 풀이 과정을 논리적으로 설명하는 태도가 돋보임.\n\n정수와 유리수의 사칙연산에서 음수 개념을 명확히 파악하고, 연산 규칙을 정확하게 적용하여 복잡한 계산도 끝까지 정확히 해결함."
-        )
-        
-        st.markdown("### 📋 2) 내 작성 규칙")
-        st.info("본인만의 원칙이 있으면 자유롭게 적으세요. 없으면 비워둬도 됩니다.")
-        
-        my_rules = st.text_area(
-            "내 작성 규칙 (자유롭게)",
-            value=proj.get('my_rules', ''),
-            height=120,
-            placeholder="예시)\n- 문장은 '~함' 체로 끝낸다\n- 학업 역량을 먼저 쓰고 태도를 뒤에 쓴다\n- 구체적인 활동 사례를 반드시 하나 포함한다\n- 한 가지 활동을 깊게 서술한다"
-        )
-        
-        proj['my_examples'] = my_examples
-        proj['my_rules'] = my_rules
-        
-        if my_examples.strip() or my_rules.strip():
-            st.success("✅ 작성 방식이 등록되었습니다. 이 방식대로 세특이 생성됩니다.")
-        
-        if st.button("➡️ 다음 단계로"):
-            proj['step'] = 3
-            st.rerun()
-    
-    # Step 3: 규정 설정
-    elif current_step == 3:
-        st.markdown("## 📋 3단계: 학교 규정 설정")
-        
-        with st.expander("필수 문체", expanded=True):
-            required_style = st.selectbox(
-                "필수 문체 선택",
-                ["자유", "함 체", "보임 체"],
-                help="학교의 공식 문체"
-            )
-        
-        with st.expander("금지어 설정", expanded=True):
-            forbidden_words = st.multiselect(
-                "금지어 선택",
-                ["선행학습", "천재적", "타고난", "의대 수준", "대학 과정", 
-                 "미흡", "태만", "산만", "도움이 필요", "부족", "급우", "친구들"],
-                default=["선행학습", "천재적", "타고난", "의대 수준", "대학 과정", "급우"]
-            )
-            
-            custom_word = st.text_input("커스텀 금지어 추가 (예: ~해야한다)")
-            if custom_word and st.button("추가"):
-                forbidden_words.append(custom_word)
-        
-        with st.expander("강조 영역 (선택)", expanded=False):
-            emphasis = st.multiselect(
-                "강조할 영역",
-                ["인성", "창의성", "협업", "도전정신", "학습습관"]
-            )
-        
-        school_rules = {
-            "required_style": required_style,
-            "forbidden_words": forbidden_words,
-            "emphasis": emphasis
-        }
-        
-        proj['school_rules'] = school_rules
-        
-        if st.button("➡️ 다음 단계로"):
-            proj['step'] = 4
-            st.rerun()
-    
-    # Step 4: 학생 정보
-    elif current_step == 4:
-        st.markdown("## 👥 4단계: 학생 정보 입력")
-        
-        st.markdown("### CSV 파일 업로드")
-        st.info("형식: 번호, 이름, 반, 수준, 주요특성, 부수특성")
-        
-        uploaded_file = st.file_uploader("CSV 파일 선택", type=["csv"])
-        
-        if uploaded_file is not None:
-            try:
-                df = pd.read_csv(uploaded_file, encoding='utf-8')
-            except:
-                df = pd.read_csv(uploaded_file, encoding='cp949')
-            
-            st.markdown("### 📊 업로드된 데이터")
-            st.dataframe(df, use_container_width=True)
-            
-            # 컬럼명 자동 감지 (영문/한글 모두 지원)
-            col_mapping = {}
-            for col in df.columns:
-                col_lower = col.lower().strip()
-                if '번호' in col or 'number' in col_lower:
-                    col_mapping['number'] = col
-                elif '이름' in col or 'name' in col_lower:
-                    col_mapping['name'] = col
-                elif '반' in col or 'class' in col_lower:
-                    col_mapping['class'] = col
-                elif '수준' in col or 'level' in col_lower:
-                    col_mapping['level'] = col
-                elif '특성' in col or 'trait' in col_lower:
-                    if '주요' in col or 'main' in col_lower:
-                        col_mapping['main_trait'] = col
-                    elif '부수' in col or 'sub' in col_lower:
-                        col_mapping['sub_traits'] = col
-            
-            # 학생 정보 저장
-            students = []
-            for idx, row in df.iterrows():
-                students.append({
-                    "number": row.get(col_mapping.get('number', '번호'), idx + 1),
-                    "name": row.get(col_mapping.get('name', '이름'), ''),
-                    "class": row.get(col_mapping.get('class', '반'), ''),
-                    "level": row.get(col_mapping.get('level', '수준'), 'A'),
-                    "main_trait": row.get(col_mapping.get('main_trait', '주요특성'), ''),
-                    "sub_traits": row.get(col_mapping.get('sub_traits', '부수특성'), '')
-                })
-            
-            proj['students'] = students
-            st.success(f"✅ {len(students)}명 학생 정보 저장됨")
-            
             if st.button("➡️ 다음 단계로"):
-                proj['step'] = 5
+                proj['step'] = 2
                 st.rerun()
     
-    # Step 5: 단원 정보
-    elif current_step == 5:
-        st.markdown("## 📚 5단계: 단원 정보")
+        # Step 2: 문체 학습
+        elif current_step == 2:
+            st.markdown("## 📚 2단계: 내 작성 방식 등록")
+            st.caption("선생님만의 세특 작성 방식을 알려주면, AI가 그 방식을 따라 씁니다. (선택사항이지만 강력 추천)")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            unit_name = st.text_input("단원명", value=proj.get('unit_name', ''))
-        with col2:
-            activity_name = st.text_input("활동명", value=proj.get('activity_name', ''))
+            st.markdown("### ✍️ 1) 내 세특 예시")
+            st.info("예전에 직접 쓰신 세특 2~3개를 붙여넣으세요. AI가 이 말투와 구조를 그대로 따라 씁니다. (가장 효과 큼)")
         
-        achievement_std = st.text_input("성취기준 (선택)", value=proj.get('achievement_std', ''))
-        
-        st.markdown("### 📏 이 단원의 세특 분량")
-        unit_target_bytes = st.number_input(
-            "목표 바이트 (한글 1글자 = 2바이트)",
-            min_value=100, max_value=1500,
-            value=proj.get('unit_target_bytes') or proj.get('target_bytes', 450),
-            step=10,
-            help="예: 450바이트 ≈ 한글 약 225자. 단원마다 다르게 지정할 수 있습니다."
-        )
-        st.caption(f"💡 약 한글 {int(unit_target_bytes/2)}자 분량으로 생성됩니다")
-        
-        st.markdown("### 성취수준별 활동 설명")
-        levels = ["A (매우우수)", "B (우수)", "C (보통)", "D (기초)", "E (불충분)"][:proj.get('num_levels', 5)]
-        
-        activity_descriptions = {}
-        for level in levels:
-            activity_descriptions[level] = st.text_area(
-                f"{level} 활동설명",
-                value=proj.get('activity_desc', {}).get(level, ''),
-                height=60
+            my_examples = st.text_area(
+                "내 세특 예시 (여러 개면 줄바꿈으로 구분)",
+                value=proj.get('my_examples', ''),
+                height=180,
+                placeholder="예시)\n소인수분해 단원에서 합성수를 소수의 곱으로 표현하는 원리를 정확히 이해하고, 이를 다양한 문제에 능숙하게 적용함. 풀이 과정을 논리적으로 설명하는 태도가 돋보임.\n\n정수와 유리수의 사칙연산에서 음수 개념을 명확히 파악하고, 연산 규칙을 정확하게 적용하여 복잡한 계산도 끝까지 정확히 해결함."
             )
         
-        proj['unit_name'] = unit_name
-        proj['activity_name'] = activity_name
-        proj['achievement_std'] = achievement_std
-        proj['activity_desc'] = activity_descriptions
-        proj['unit_target_bytes'] = unit_target_bytes
+            st.markdown("### 📋 2) 내 작성 규칙")
+            st.info("본인만의 원칙이 있으면 자유롭게 적으세요. 없으면 비워둬도 됩니다.")
         
-        if st.button("➡️ 세특 생성 준비"):
-            proj['step'] = 6
-            st.rerun()
+            my_rules = st.text_area(
+                "내 작성 규칙 (자유롭게)",
+                value=proj.get('my_rules', ''),
+                height=120,
+                placeholder="예시)\n- 문장은 '~함' 체로 끝낸다\n- 학업 역량을 먼저 쓰고 태도를 뒤에 쓴다\n- 구체적인 활동 사례를 반드시 하나 포함한다\n- 한 가지 활동을 깊게 서술한다"
+            )
+        
+            proj['my_examples'] = my_examples
+            proj['my_rules'] = my_rules
+        
+            if my_examples.strip() or my_rules.strip():
+                st.success("✅ 작성 방식이 등록되었습니다. 이 방식대로 세특이 생성됩니다.")
+        
+            if st.button("➡️ 다음 단계로"):
+                proj['step'] = 3
+                st.rerun()
     
-    # Step 6: 세특 생성 & 품질 검사
-    elif current_step == 6:
-        st.markdown("## 🚀 6단계: 세특 생성")
+        # Step 3: 규정 설정
+        elif current_step == 3:
+            st.markdown("## 📋 3단계: 학교 규정 설정")
         
-        with st.container(border=True):
-            st.markdown("### 📊 생성 준비")
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("학생 수", len(proj.get('students', [])))
-            col2.metric("작성방식", "등록됨" if (proj.get('my_examples','').strip() or proj.get('my_rules','').strip()) else "기본")
-            col3.metric("규정", "설정됨" if proj.get('school_rules') else "미설정")
-            col4.metric("목표", f"{proj.get('unit_target_bytes') or proj.get('target_bytes')}B")
-        
-        if st.button("🎯 세특 생성 시작", use_container_width=True):
-            st.markdown("### ⏳ 생성 중...")
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            results = []
-            total_students = len(proj.get('students', []))
-            
-            for i, student in enumerate(proj.get('students', [])):
-                status_text.text(f"생성 중: {student['name']} ({i+1}/{total_students})")
-                
-                # 세특 생성
-                seteuk = generate_seteuk(
-                    proj,
-                    school_rules=proj.get('school_rules'),
-                    student_info=student
+            with st.expander("필수 문체", expanded=True):
+                required_style = st.selectbox(
+                    "필수 문체 선택",
+                    ["자유", "함 체", "보임 체"],
+                    help="학교의 공식 문체"
                 )
-                
-                if seteuk:
-                    results.append({
-                        "student": student['name'],
-                        "level": student['level'],
-                        "seteuk": seteuk,
-                        "bytes": len(seteuk.encode('utf-8'))
-                    })
-                
-                progress = (i + 1) / total_students
-                progress_bar.progress(progress)
-            
-            status_text.text("✅ 생성 완료!")
-            
-            # 품질 검사
-            st.markdown("### 📊 품질 검사 중...")
-            
-            # 중복도 검사
-            duplicates = []
-            for i, result1 in enumerate(results):
-                for j, result2 in enumerate(results):
-                    if i < j:
-                        similarity = calculate_similarity(result1['seteuk'], result2['seteuk'])
-                        if similarity > 65:
-                            duplicates.append({
-                                "student1": result1['student'],
-                                "student2": result2['student'],
-                                "similarity": round(similarity, 1)
-                            })
-            
-            # 금지어 검사
-            forbidden_warnings = []
-            forbidden_words = proj.get('school_rules', {}).get('forbidden_words', [])
-            for result in results:
-                found = check_forbidden_words(result['seteuk'], forbidden_words)
-                if found:
-                    forbidden_warnings.append({
-                        "student": result['student'],
-                        "words": found
-                    })
-            
-            # 결과 저장
-            proj['results'] = results
-            proj['quality_check'] = {
-                "duplicates": duplicates,
-                "forbidden_warnings": forbidden_warnings
-            }
-            
-            # 결과 표시
-            st.markdown("---")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("생성된 세특", len(results))
-            with col2:
-                st.metric("중복 경고", len(duplicates))
-            with col3:
-                st.metric("금지어 검출", len(forbidden_warnings))
-            
-            if len(duplicates) > 0:
-                st.markdown("### ⚠️ 중복도 높은 쌍")
-                for dup in duplicates:
-                    st.warning(f"{dup['student1']} vs {dup['student2']}: {dup['similarity']}% 유사도")
-            
-            if len(forbidden_warnings) > 0:
-                st.markdown("### ⚠️ 금지어 검출")
-                for warning in forbidden_warnings:
-                    st.warning(f"{warning['student']}: {', '.join(warning['words'])} 포함")
-            
-            st.success(f"✅ 총 {len(results)}명의 세특이 생성되었습니다!")
         
-        # 생성된 결과가 있으면 항상 표시 (다운로드 포함)
-        if proj.get('results'):
-            results = proj['results']
+            with st.expander("금지어 설정", expanded=True):
+                forbidden_words = st.multiselect(
+                    "금지어 선택",
+                    ["선행학습", "천재적", "타고난", "의대 수준", "대학 과정", 
+                     "미흡", "태만", "산만", "도움이 필요", "부족", "급우", "친구들"],
+                    default=["선행학습", "천재적", "타고난", "의대 수준", "대학 과정", "급우"]
+                )
             
-            st.divider()
-            st.markdown("### 📥 결과 다운로드")
-            
-            # 표 형태로 정리
-            import pandas as pd
-            download_df = pd.DataFrame([
-                {
-                    "번호": idx + 1,
-                    "이름": r['student'],
-                    "수준": r['level'],
-                    "세특": r['seteuk'],
-                    "바이트": r['bytes']
-                }
-                for idx, r in enumerate(results)
-            ])
-            
-            col_dl1, col_dl2 = st.columns(2)
-            
-            # 엑셀 다운로드
-            with col_dl1:
+                custom_word = st.text_input("커스텀 금지어 추가 (예: ~해야한다)")
+                if custom_word and st.button("추가"):
+                    forbidden_words.append(custom_word)
+        
+            with st.expander("강조 영역 (선택)", expanded=False):
+                emphasis = st.multiselect(
+                    "강조할 영역",
+                    ["인성", "창의성", "협업", "도전정신", "학습습관"]
+                )
+        
+            school_rules = {
+                "required_style": required_style,
+                "forbidden_words": forbidden_words,
+                "emphasis": emphasis
+            }
+        
+            proj['school_rules'] = school_rules
+        
+            if st.button("➡️ 다음 단계로"):
+                proj['step'] = 4
+                st.rerun()
+    
+        # Step 4: 학생 정보
+        elif current_step == 4:
+            st.markdown("## 👥 4단계: 학생 정보 입력")
+        
+            st.markdown("### CSV 파일 업로드")
+            st.info("형식: 번호, 이름, 반, 수준, 주요특성, 부수특성")
+        
+            uploaded_file = st.file_uploader("CSV 파일 선택", type=["csv"])
+        
+            if uploaded_file is not None:
                 try:
-                    import io
-                    buffer = io.BytesIO()
-                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                        download_df.to_excel(writer, index=False, sheet_name='세특')
-                    buffer.seek(0)
+                    df = pd.read_csv(uploaded_file, encoding='utf-8')
+                except:
+                    df = pd.read_csv(uploaded_file, encoding='cp949')
+            
+                st.markdown("### 📊 업로드된 데이터")
+                st.dataframe(df, use_container_width=True)
+            
+                # 컬럼명 자동 감지 (영문/한글 모두 지원)
+                col_mapping = {}
+                for col in df.columns:
+                    col_lower = col.lower().strip()
+                    if '번호' in col or 'number' in col_lower:
+                        col_mapping['number'] = col
+                    elif '이름' in col or 'name' in col_lower:
+                        col_mapping['name'] = col
+                    elif '반' in col or 'class' in col_lower:
+                        col_mapping['class'] = col
+                    elif '수준' in col or 'level' in col_lower:
+                        col_mapping['level'] = col
+                    elif '특성' in col or 'trait' in col_lower:
+                        if '주요' in col or 'main' in col_lower:
+                            col_mapping['main_trait'] = col
+                        elif '부수' in col or 'sub' in col_lower:
+                            col_mapping['sub_traits'] = col
+            
+                # 학생 정보 저장
+                students = []
+                for idx, row in df.iterrows():
+                    students.append({
+                        "number": row.get(col_mapping.get('number', '번호'), idx + 1),
+                        "name": row.get(col_mapping.get('name', '이름'), ''),
+                        "class": row.get(col_mapping.get('class', '반'), ''),
+                        "level": row.get(col_mapping.get('level', '수준'), 'A'),
+                        "main_trait": row.get(col_mapping.get('main_trait', '주요특성'), ''),
+                        "sub_traits": row.get(col_mapping.get('sub_traits', '부수특성'), '')
+                    })
+            
+                proj['students'] = students
+                st.success(f"✅ {len(students)}명 학생 정보 저장됨")
+            
+                if st.button("➡️ 다음 단계로"):
+                    proj['step'] = 5
+                    st.rerun()
+    
+        # Step 5: 단원 정보
+        elif current_step == 5:
+            st.markdown("## 📚 5단계: 단원 정보")
+        
+            col1, col2 = st.columns(2)
+            with col1:
+                unit_name = st.text_input("단원명", value=proj.get('unit_name', ''))
+            with col2:
+                activity_name = st.text_input("활동명", value=proj.get('activity_name', ''))
+        
+            achievement_std = st.text_input("성취기준 (선택)", value=proj.get('achievement_std', ''))
+        
+            st.markdown("### 📏 이 단원의 세특 분량")
+            unit_target_bytes = st.number_input(
+                "목표 바이트 (한글 1글자 = 2바이트)",
+                min_value=100, max_value=1500,
+                value=proj.get('unit_target_bytes') or proj.get('target_bytes', 450),
+                step=10,
+                help="예: 450바이트 ≈ 한글 약 225자. 단원마다 다르게 지정할 수 있습니다."
+            )
+            st.caption(f"💡 약 한글 {int(unit_target_bytes/2)}자 분량으로 생성됩니다")
+        
+            st.markdown("### 성취수준별 활동 설명")
+            levels = ["A (매우우수)", "B (우수)", "C (보통)", "D (기초)", "E (불충분)"][:proj.get('num_levels', 5)]
+        
+            activity_descriptions = {}
+            for level in levels:
+                activity_descriptions[level] = st.text_area(
+                    f"{level} 활동설명",
+                    value=proj.get('activity_desc', {}).get(level, ''),
+                    height=60
+                )
+        
+            proj['unit_name'] = unit_name
+            proj['activity_name'] = activity_name
+            proj['achievement_std'] = achievement_std
+            proj['activity_desc'] = activity_descriptions
+            proj['unit_target_bytes'] = unit_target_bytes
+        
+            if st.button("➡️ 세특 생성 준비"):
+                proj['step'] = 6
+                st.rerun()
+    
+        # Step 6: 세특 생성 & 품질 검사
+        elif current_step == 6:
+            st.markdown("## 🚀 6단계: 세특 생성")
+        
+            with st.container(border=True):
+                st.markdown("### 📊 생성 준비")
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("학생 수", len(proj.get('students', [])))
+                col2.metric("작성방식", "등록됨" if (proj.get('my_examples','').strip() or proj.get('my_rules','').strip()) else "기본")
+                col3.metric("규정", "설정됨" if proj.get('school_rules') else "미설정")
+                col4.metric("목표", f"{proj.get('unit_target_bytes') or proj.get('target_bytes')}B")
+        
+            if st.button("🎯 세특 생성 시작", use_container_width=True):
+                st.markdown("### ⏳ 생성 중...")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+            
+                results = []
+                total_students = len(proj.get('students', []))
+            
+                for i, student in enumerate(proj.get('students', [])):
+                    status_text.text(f"생성 중: {student['name']} ({i+1}/{total_students})")
+                
+                    # 세특 생성
+                    seteuk = generate_seteuk(
+                        proj,
+                        school_rules=proj.get('school_rules'),
+                        student_info=student
+                    )
+                
+                    if seteuk:
+                        results.append({
+                            "student": student['name'],
+                            "level": student['level'],
+                            "seteuk": seteuk,
+                            "bytes": len(seteuk.encode('utf-8'))
+                        })
+                
+                    progress = (i + 1) / total_students
+                    progress_bar.progress(progress)
+            
+                status_text.text("✅ 생성 완료!")
+            
+                # 품질 검사
+                st.markdown("### 📊 품질 검사 중...")
+            
+                # 중복도 검사
+                duplicates = []
+                for i, result1 in enumerate(results):
+                    for j, result2 in enumerate(results):
+                        if i < j:
+                            similarity = calculate_similarity(result1['seteuk'], result2['seteuk'])
+                            if similarity > 65:
+                                duplicates.append({
+                                    "student1": result1['student'],
+                                    "student2": result2['student'],
+                                    "similarity": round(similarity, 1)
+                                })
+            
+                # 금지어 검사
+                forbidden_warnings = []
+                forbidden_words = proj.get('school_rules', {}).get('forbidden_words', [])
+                for result in results:
+                    found = check_forbidden_words(result['seteuk'], forbidden_words)
+                    if found:
+                        forbidden_warnings.append({
+                            "student": result['student'],
+                            "words": found
+                        })
+            
+                # 결과 저장
+                proj['results'] = results
+                proj['quality_check'] = {
+                    "duplicates": duplicates,
+                    "forbidden_warnings": forbidden_warnings
+                }
+            
+                # 결과 표시
+                st.markdown("---")
+            
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("생성된 세특", len(results))
+                with col2:
+                    st.metric("중복 경고", len(duplicates))
+                with col3:
+                    st.metric("금지어 검출", len(forbidden_warnings))
+            
+                if len(duplicates) > 0:
+                    st.markdown("### ⚠️ 중복도 높은 쌍")
+                    for dup in duplicates:
+                        st.warning(f"{dup['student1']} vs {dup['student2']}: {dup['similarity']}% 유사도")
+            
+                if len(forbidden_warnings) > 0:
+                    st.markdown("### ⚠️ 금지어 검출")
+                    for warning in forbidden_warnings:
+                        st.warning(f"{warning['student']}: {', '.join(warning['words'])} 포함")
+            
+                st.success(f"✅ 총 {len(results)}명의 세특이 생성되었습니다!")
+        
+            # 생성된 결과가 있으면 항상 표시 (다운로드 포함)
+            if proj.get('results'):
+                results = proj['results']
+            
+                st.divider()
+                st.markdown("### 📥 결과 다운로드")
+            
+                # 표 형태로 정리
+                import pandas as pd
+                download_df = pd.DataFrame([
+                    {
+                        "번호": idx + 1,
+                        "이름": r['student'],
+                        "수준": r['level'],
+                        "세특": r['seteuk'],
+                        "바이트": r['bytes']
+                    }
+                    for idx, r in enumerate(results)
+                ])
+            
+                col_dl1, col_dl2 = st.columns(2)
+            
+                # 엑셀 다운로드
+                with col_dl1:
+                    try:
+                        import io
+                        buffer = io.BytesIO()
+                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                            download_df.to_excel(writer, index=False, sheet_name='세특')
+                        buffer.seek(0)
                     
-                    file_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.xlsx"
+                        file_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.xlsx"
+                        st.download_button(
+                            label="📊 엑셀(.xlsx)로 다운로드",
+                            data=buffer,
+                            file_name=file_name,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"엑셀 생성 오류: {e}")
+            
+                # CSV 다운로드
+                with col_dl2:
+                    csv_data = download_df.to_csv(index=False).encode('utf-8-sig')
+                    csv_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.csv"
                     st.download_button(
-                        label="📊 엑셀(.xlsx)로 다운로드",
-                        data=buffer,
-                        file_name=file_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        label="📄 CSV로 다운로드",
+                        data=csv_data,
+                        file_name=csv_name,
+                        mime="text/csv",
                         use_container_width=True
                     )
-                except Exception as e:
-                    st.error(f"엑셀 생성 오류: {e}")
             
-            # CSV 다운로드
-            with col_dl2:
-                csv_data = download_df.to_csv(index=False).encode('utf-8-sig')
-                csv_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.csv"
-                st.download_button(
-                    label="📄 CSV로 다운로드",
-                    data=csv_data,
-                    file_name=csv_name,
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            
-            st.markdown("### 📋 생성된 세특 전체 보기")
-            st.dataframe(download_df, use_container_width=True, height=400)
+                st.markdown("### 📋 생성된 세특 전체 보기")
+                st.dataframe(download_df, use_container_width=True, height=400)
 
 st.divider()
 
