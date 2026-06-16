@@ -185,12 +185,22 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             f"활동: {student_info.get('activity', '')}",
         ])
     
+    target = project.get('unit_target_bytes') or project.get('target_bytes', 450)
+    # 한글 기준 대략 글자 수 (1글자 ≈ 2바이트)
+    approx_chars = int(target / 2)
     prompt_parts.extend([
         "",
         "## 작성 요청",
-        f"위 조건을 반영해서 세특 1개를 생성해줘.",
-        f"({project.get('target_bytes', 450)}자 근처)",
-        f"구체적이고 다양하게.",
+        "위 조건을 반영해서 세특 1개를 생성해줘.",
+        "",
+        "## 분량 (★ 매우 중요 - 반드시 지킬 것)",
+        f"- 목표: {target}바이트 이내. 절대 초과하지 말 것.",
+        f"- 바이트 계산: 한글 1글자=2바이트, 영문/숫자/공백/문장부호=1바이트.",
+        f"- 따라서 한글 기준 약 {approx_chars}자 안팎으로 작성.",
+        f"- {target}바이트를 넘기면 잘못된 결과임. 길어지면 문장을 줄여서라도 맞출 것.",
+        "- 세특 문장만 출력하고, 글자수/바이트수 표기나 설명은 붙이지 말 것.",
+        "",
+        "구체적이고 다양하게 작성하되, 위 분량을 최우선으로 지켜줘.",
     ])
     
     prompt = "\n".join(prompt_parts)
@@ -567,6 +577,16 @@ if st.session_state.current_project is not None:
         
         achievement_std = st.text_input("성취기준 (선택)", value=proj.get('achievement_std', ''))
         
+        st.markdown("### 📏 이 단원의 세특 분량")
+        unit_target_bytes = st.number_input(
+            "목표 바이트 (한글 1글자 = 2바이트)",
+            min_value=100, max_value=1500,
+            value=proj.get('unit_target_bytes') or proj.get('target_bytes', 450),
+            step=10,
+            help="예: 450바이트 ≈ 한글 약 225자. 단원마다 다르게 지정할 수 있습니다."
+        )
+        st.caption(f"💡 약 한글 {int(unit_target_bytes/2)}자 분량으로 생성됩니다")
+        
         st.markdown("### 성취수준별 활동 설명")
         levels = ["A (매우우수)", "B (우수)", "C (보통)", "D (기초)", "E (불충분)"][:proj.get('num_levels', 5)]
         
@@ -582,6 +602,7 @@ if st.session_state.current_project is not None:
         proj['activity_name'] = activity_name
         proj['achievement_std'] = achievement_std
         proj['activity_desc'] = activity_descriptions
+        proj['unit_target_bytes'] = unit_target_bytes
         
         if st.button("➡️ 세특 생성 준비"):
             proj['step'] = 6
@@ -597,7 +618,7 @@ if st.session_state.current_project is not None:
             col1.metric("학생 수", len(proj.get('students', [])))
             col2.metric("문체", "학습됨" if proj.get('style_profile') else "기본")
             col3.metric("규정", "설정됨" if proj.get('school_rules') else "미설정")
-            col4.metric("목표", f"{proj.get('target_bytes')}B")
+            col4.metric("목표", f"{proj.get('unit_target_bytes') or proj.get('target_bytes')}B")
         
         if st.button("🎯 세특 생성 시작", use_container_width=True):
             st.markdown("### ⏳ 생성 중...")
