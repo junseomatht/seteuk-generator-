@@ -92,6 +92,79 @@ JSON 형식으로 정리해줘:
         st.error(f"분석 중 오류: {e}")
         return None
 
+def build_apps_script(results, project):
+    """구글시트에 세특을 자동 입력하는 Apps Script 코드 생성"""
+    import json
+    # 데이터를 JS 배열로 변환
+    rows = []
+    for idx, r in enumerate(results):
+        rows.append({
+            "번호": idx + 1,
+            "이름": r['student'],
+            "수준": r['level'],
+            "세특": r['seteuk'],
+            "바이트": len(r['seteuk'].encode('utf-8'))
+        })
+    data_json = json.dumps(rows, ensure_ascii=False, indent=2)
+    
+    subject = project.get('subject', '교과')
+    unit = project.get('unit_name', '')
+    sheet_name = f"{subject} 세특"
+    if unit:
+        sheet_name = f"{subject}_{unit}"
+    
+    code = f'''/**
+ * 교과 세특 자동 입력 스크립트
+ * 교과: {subject}  단원: {unit}
+ *
+ * [사용법]
+ * 1. 구글 스프레드시트에서 확장 프로그램 > Apps Script 열기
+ * 2. 이 코드를 전부 붙여넣고 저장(디스크 아이콘)
+ * 3. 상단 실행(▶) 버튼 클릭
+ * 4. 권한 요청이 뜨면 본인 계정으로 허용
+ * 5. 시트에 세특이 자동으로 입력됩니다
+ */
+
+function 세특입력() {{
+  var data = {data_json};
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = "{sheet_name}";
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {{
+    sheet = ss.insertSheet(sheetName);
+  }}
+  sheet.clear();
+
+  // 헤더
+  var headers = ["번호", "이름", "수준", "세특", "바이트"];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#e8eaed");
+
+  // 데이터
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {{
+    rows.push([data[i]["번호"], data[i]["이름"], data[i]["수준"], data[i]["세특"], data[i]["바이트"]]);
+  }}
+  if (rows.length > 0) {{
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }}
+
+  // 보기 좋게 정리
+  sheet.setColumnWidth(1, 50);
+  sheet.setColumnWidth(2, 90);
+  sheet.setColumnWidth(3, 60);
+  sheet.setColumnWidth(4, 600);
+  sheet.setColumnWidth(5, 70);
+  sheet.getRange(2, 4, rows.length, 1).setWrap(true);
+  sheet.setFrozenRows(1);
+
+  SpreadsheetApp.getUi().alert("세특 " + data.length + "건이 입력되었습니다!");
+}}
+'''
+    return code
+
+
 def calculate_similarity(text1, text2):
     """개선된 유사도 계산 (단어 + 글자 TF-IDF 조합)"""
     try:
@@ -275,18 +348,26 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
     
     prompt = "\n".join(prompt_parts)
     
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1000,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return message.content[0].text
-    except Exception as e:
-        st.error(f"생성 중 오류: {e}")
-        return None
+    import time
+    last_error = None
+    for attempt in range(3):  # 최대 3번 시도
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=1000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return message.content[0].text.strip()
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(2)  # 2초 쉬고 다시 시도
+    
+    # 3번 다 실패
+    st.warning(f"⚠️ 생성 실패 (3회 시도): {last_error}")
+    return None
 
 # ==========================================
 # 메인 UI
@@ -782,28 +863,79 @@ if st.session_state.current_project is not None:
             
                 st.success(f"✅ 총 {len(results)}명의 세특이 생성되었습니다!")
         
-            # 생성된 결과가 있으면 항상 표시 (다운로드 포함)
+            # 생성된 결과가 있으면 항상 표시 (수정/재생성/다운로드 포함)
             if proj.get('results'):
                 results = proj['results']
-            
+                
+                st.divider()
+                st.markdown("### ✏️ 생성된 세특 (수정 · 재생성 가능)")
+                st.caption("세특을 직접 고치거나, 학생별로 다시 생성할 수 있습니다. 고친 내용은 바로 저장됩니다.")
+                
+                import pandas as pd
+                
+                for idx, r in enumerate(results):
+                    byte_len = len(r['seteuk'].encode('utf-8'))
+                    target = proj.get('unit_target_bytes') or proj.get('target_bytes', 450)
+                    over = byte_len > target
+                    label = f"{idx+1}. {r['student']} ({r['level']}) — {byte_len}B"
+                    if over:
+                        label += " ⚠️초과"
+                    
+                    with st.expander(label, expanded=False):
+                        # 수정 가능한 텍스트 영역
+                        edited = st.text_area(
+                            "세특 내용",
+                            value=r['seteuk'],
+                            height=140,
+                            key=f"edit_{idx}"
+                        )
+                        # 수정 내용이 바뀌면 저장
+                        if edited != r['seteuk']:
+                            results[idx]['seteuk'] = edited
+                            results[idx]['bytes'] = len(edited.encode('utf-8'))
+                            proj['results'] = results
+                        
+                        cur_bytes = len(edited.encode('utf-8'))
+                        st.caption(f"현재 {cur_bytes}바이트 / 목표 {target}바이트")
+                        
+                        # 이 학생만 재생성
+                        if st.button(f"🔄 {r['student']} 세특 다시 생성", key=f"regen_{idx}"):
+                            # 해당 학생 정보 찾기
+                            student = None
+                            for s in proj.get('students', []):
+                                if s['name'] == r['student']:
+                                    student = s
+                                    break
+                            if student:
+                                with st.spinner(f"{r['student']} 세특 재생성 중..."):
+                                    new_seteuk = generate_seteuk(
+                                        proj,
+                                        school_rules=proj.get('school_rules'),
+                                        student_info=student
+                                    )
+                                if new_seteuk:
+                                    results[idx]['seteuk'] = new_seteuk
+                                    results[idx]['bytes'] = len(new_seteuk.encode('utf-8'))
+                                    proj['results'] = results
+                                    st.rerun()
+                
+                # 다운로드용 표
                 st.divider()
                 st.markdown("### 📥 결과 다운로드")
-            
-                # 표 형태로 정리
-                import pandas as pd
+                
                 download_df = pd.DataFrame([
                     {
                         "번호": idx + 1,
                         "이름": r['student'],
                         "수준": r['level'],
                         "세특": r['seteuk'],
-                        "바이트": r['bytes']
+                        "바이트": len(r['seteuk'].encode('utf-8'))
                     }
                     for idx, r in enumerate(results)
                 ])
-            
-                col_dl1, col_dl2 = st.columns(2)
-            
+                
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                
                 # 엑셀 다운로드
                 with col_dl1:
                     try:
@@ -812,10 +944,9 @@ if st.session_state.current_project is not None:
                         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                             download_df.to_excel(writer, index=False, sheet_name='세특')
                         buffer.seek(0)
-                    
                         file_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.xlsx"
                         st.download_button(
-                            label="📊 엑셀(.xlsx)로 다운로드",
+                            label="📊 엑셀(.xlsx)",
                             data=buffer,
                             file_name=file_name,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -823,21 +954,41 @@ if st.session_state.current_project is not None:
                         )
                     except Exception as e:
                         st.error(f"엑셀 생성 오류: {e}")
-            
+                
                 # CSV 다운로드
                 with col_dl2:
                     csv_data = download_df.to_csv(index=False).encode('utf-8-sig')
                     csv_name = f"세특_{proj.get('subject','')}_{proj.get('unit_name','')}.csv"
                     st.download_button(
-                        label="📄 CSV로 다운로드",
+                        label="📄 CSV",
                         data=csv_data,
                         file_name=csv_name,
                         mime="text/csv",
                         use_container_width=True
                     )
-            
+                
+                # 구글시트 Apps Script 코드 다운로드
+                with col_dl3:
+                    script_code = build_apps_script(results, proj)
+                    st.download_button(
+                        label="📋 구글시트 코드",
+                        data=script_code.encode('utf-8'),
+                        file_name=f"세특_구글시트_{proj.get('subject','')}.gs",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                
                 st.markdown("### 📋 생성된 세특 전체 보기")
                 st.dataframe(download_df, use_container_width=True, height=400)
+                
+                with st.expander("📖 구글시트 코드 사용법"):
+                    st.markdown("""
+                    1. 위 **📋 구글시트 코드** 버튼을 눌러 `.gs` 파일을 받으세요.
+                    2. 구글 스프레드시트를 새로 만들고, 메뉴에서 **확장 프로그램 → Apps Script**를 엽니다.
+                    3. 기존 내용을 지우고, 받은 파일 내용을 붙여넣은 뒤 저장합니다.
+                    4. 상단의 **실행(▶)** 버튼을 누르면, 세특이 시트에 자동으로 입력됩니다.
+                    5. 권한 요청이 뜨면 본인 계정으로 허용해 주세요.
+                    """)
 
 st.divider()
 
