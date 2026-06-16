@@ -16,6 +16,117 @@ st.set_page_config(
 )
 
 # ==========================================
+# 모던 디자인 (CSS)
+# ==========================================
+st.markdown("""
+<style>
+    /* 전체 폰트 & 배경 */
+    .stApp {
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    }
+    
+    /* 메인 제목 */
+    h1 {
+        background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px;
+    }
+    
+    /* 소제목 */
+    h2, h3 {
+        color: #1e293b !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.3px;
+    }
+    
+    /* 버튼 - 모던 그라데이션 */
+    .stButton > button {
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: white;
+        font-weight: 600;
+        padding: 0.5rem 1.2rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+        background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+    }
+    
+    /* 다운로드 버튼 - 초록 계열 */
+    .stDownloadButton > button {
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+        transition: all 0.2s ease;
+    }
+    .stDownloadButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    }
+    
+    /* 컨테이너 카드 느낌 */
+    [data-testid="stExpander"] {
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        background: white;
+    }
+    
+    /* 입력 필드 */
+    .stTextInput > div > div > input,
+    .stTextArea textarea,
+    .stNumberInput > div > div > input {
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+    }
+    
+    /* metric 카드 */
+    [data-testid="stMetric"] {
+        background: white;
+        border-radius: 14px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* 사이드바 */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+    }
+    [data-testid="stSidebar"] * {
+        color: #f1f5f9 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255,255,255,0.1);
+        box-shadow: none;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255,255,255,0.2);
+    }
+    
+    /* 구분선 */
+    hr {
+        border-color: #e2e8f0;
+    }
+    
+    /* 알림 박스 둥글게 */
+    .stAlert {
+        border-radius: 12px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
 # 세션 상태 초기화
 # ==========================================
 if "projects" not in st.session_state:
