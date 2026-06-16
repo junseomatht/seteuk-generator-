@@ -186,16 +186,70 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             f"금지어: {', '.join(school_rules.get('forbidden_words', []))}",
         ])
     
-    # 학생 정보 추가
-    if student_info:
+    # 강조 영역 추가
+    if school_rules and school_rules.get('emphasis'):
+        prompt_parts.extend([
+            f"강조할 영역: {', '.join(school_rules.get('emphasis', []))} (이 부분이 드러나도록 서술)",
+        ])
+    
+    # 단원 정보 추가
+    unit_name = project.get('unit_name', '')
+    activity_name = project.get('activity_name', '')
+    achievement_std = project.get('achievement_std', '')
+    if unit_name or activity_name or achievement_std:
         prompt_parts.extend([
             "",
-            "## 학생 정보",
+            "## 단원 및 활동 정보",
+        ])
+        if unit_name:
+            prompt_parts.append(f"단원: {unit_name}")
+        if activity_name:
+            prompt_parts.append(f"활동: {activity_name}")
+        if achievement_std:
+            prompt_parts.append(f"성취기준: {achievement_std} (이 성취기준에 맞는 내용으로 작성)")
+    
+    # 학생 정보 추가
+    if student_info:
+        level = student_info.get('level', '')
+        
+        # 학생 수준에 맞는 표현 풀 찾기 (activity_desc는 "A (매우우수)" 형태의 키)
+        expression_pool = ''
+        for key, val in project.get('activity_desc', {}).items():
+            if key.strip().upper().startswith(str(level).strip().upper()) and val.strip():
+                expression_pool = val.strip()
+                break
+        
+        prompt_parts.extend([
+            "",
+            "## 이 학생 정보",
             f"이름: {student_info.get('name', '')}",
-            f"수준: {student_info.get('level', '')}",
+            f"성취수준: {level}",
             f"주요특성: {student_info.get('main_trait', '')}",
             f"부수특성: {student_info.get('sub_traits', '')}",
-            f"활동: {student_info.get('activity', '')}",
+        ])
+        
+        if expression_pool:
+            prompt_parts.extend([
+                "",
+                "## ★★★ 이 수준 학생에게 쓸 표현들 (가장 중요 - 최대한 살릴 것)",
+                "아래는 선생님이 이 수준 학생에게 직접 쓰려고 준비한 표현들이야. 한 줄에 하나씩 있어.",
+                "이 중에서 1~2개를 골라, 그 표현의 어휘와 말투를 최대한 그대로 살려서 세특을 작성해줘.",
+                "표현을 통째로 새로 지어내지 말고, 아래 표현을 뼈대로 삼아 학생의 특성만 자연스럽게 덧붙이는 방식으로 쓸 것.",
+                "단, 학생마다 다른 표현을 고르거나 다르게 조합해서 서로 똑같아지지 않게 할 것.",
+                "",
+                expression_pool,
+            ])
+        
+        # 수준별 차등 서술 지침
+        prompt_parts.extend([
+            "",
+            "## 성취수준별 서술 강도 (반드시 반영)",
+            "- A(매우우수): 자기주도성, 깊은 이해, 탁월한 적용까지 강조",
+            "- B(우수): 정확한 이해와 능숙한 적용을 강조",
+            "- C(보통): 성실한 참여와 기본 개념 이해를 강조",
+            "- D(기초): 꾸준한 노력과 성장 가능성을 강조",
+            "- E(불충분): 참여 태도와 작은 진전, 긍정적 변화를 강조",
+            f"→ 이 학생은 {level}수준이므로 그에 맞는 강도로 서술할 것. 수준에 맞지 않게 과장하지 말 것.",
         ])
     
     target = project.get('unit_target_bytes') or project.get('target_bytes', 450)
@@ -599,17 +653,24 @@ if st.session_state.current_project is not None:
             )
             st.caption(f"💡 약 한글 {int(unit_target_bytes/2)}자 분량으로 생성됩니다")
         
-            st.markdown("### 성취수준별 활동 설명")
+            st.markdown("### 📝 성취수준별 표현 풀(pool)")
+            st.info("각 수준마다 평소 쓰시는 표현을 **여러 개(5개 정도) 줄바꿈으로** 입력하세요. AI가 이 표현들을 최대한 살려서 학생별 세특을 작성합니다.")
             levels = ["A (매우우수)", "B (우수)", "C (보통)", "D (기초)", "E (불충분)"][:proj.get('num_levels', 5)]
-        
+            
+            placeholders = {
+                "A (매우우수)": "소인수분해 퍼즐 문제를 매우 우수하게 해결하였음\n복잡한 합성수도 막힘 없이 소인수분해함\n원리를 정확히 이해하고 다양한 문제에 능숙하게 적용함",
+                "E (불충분)": "소인수분해 퍼즐 활동에 참여함\n기초 개념을 익히기 위해 꾸준히 노력함",
+            }
+            
             activity_descriptions = {}
             for level in levels:
                 activity_descriptions[level] = st.text_area(
-                    f"{level} 활동설명",
+                    f"{level} 표현들 (한 줄에 하나씩)",
                     value=proj.get('activity_desc', {}).get(level, ''),
-                    height=60
+                    height=120,
+                    placeholder=placeholders.get(level, "이 수준 학생에게 쓰는 표현을 한 줄에 하나씩 입력")
                 )
-        
+            
             proj['unit_name'] = unit_name
             proj['activity_name'] = activity_name
             proj['achievement_std'] = achievement_std
