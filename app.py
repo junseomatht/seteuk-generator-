@@ -204,73 +204,93 @@ JSON 형식으로 정리해줘:
         return None
 
 def build_apps_script(results, project):
-    """구글시트에 세특을 자동 입력하는 Apps Script 코드 생성"""
+    """구글시트에 세특을 반별 시트로 자동 입력하는 Apps Script 코드 생성"""
     import json
-    # 데이터를 JS 배열로 변환
-    rows = []
-    for idx, r in enumerate(results):
-        rows.append({
-            "번호": idx + 1,
+    
+    # 반별로 데이터 묶기
+    classes = {}
+    for r in results:
+        cls = str(r.get('class', '') or '미분류').strip()
+        if cls not in classes:
+            classes[cls] = []
+        classes[cls].append({
             "이름": r['student'],
             "수준": r['level'],
             "세특": r['seteuk'],
             "바이트": len(r['seteuk'].encode('utf-8'))
         })
-    data_json = json.dumps(rows, ensure_ascii=False, indent=2)
+    
+    # 각 반 안에서 번호 매기기
+    classes_data = {}
+    for cls, students in classes.items():
+        numbered = []
+        for idx, s in enumerate(students):
+            numbered.append({"번호": idx + 1, **s})
+        classes_data[cls] = numbered
+    
+    data_json = json.dumps(classes_data, ensure_ascii=False, indent=2)
     
     subject = project.get('subject', '교과')
     unit = project.get('unit_name', '')
-    sheet_name = f"{subject} 세특"
+    title = f"{subject}"
     if unit:
-        sheet_name = f"{subject}_{unit}"
+        title = f"{subject} - {unit}"
     
     code = f'''/**
  * 교과 세특 자동 입력 스크립트
- * 교과: {subject}  단원: {unit}
+ * {title}
  *
  * [사용법]
  * 1. 구글 스프레드시트에서 확장 프로그램 > Apps Script 열기
- * 2. 이 코드를 전부 붙여넣고 저장(디스크 아이콘)
- * 3. 상단 실행(▶) 버튼 클릭
+ * 2. 이 코드를 전부 붙여넣고 저장(디스크 아이콘 또는 Ctrl+S)
+ * 3. 상단 함수 선택칸에 insertSeteuk 확인 후 실행(▶) 클릭
  * 4. 권한 요청이 뜨면 본인 계정으로 허용
- * 5. 시트에 세특이 자동으로 입력됩니다
+ * 5. 반별로 시트가 생성되며 세특이 자동 입력됩니다
  */
 
-function 세특입력() {{
-  var data = {data_json};
+function insertSeteuk() {{
+  var classesData = {data_json};
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetName = "{sheet_name}";
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {{
-    sheet = ss.insertSheet(sheetName);
-  }}
-  sheet.clear();
-
-  // 헤더
   var headers = ["번호", "이름", "수준", "세특", "바이트"];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#e8eaed");
+  var totalCount = 0;
 
-  // 데이터
-  var rows = [];
-  for (var i = 0; i < data.length; i++) {{
-    rows.push([data[i]["번호"], data[i]["이름"], data[i]["수준"], data[i]["세특"], data[i]["바이트"]]);
+  // 반별로 시트 생성
+  for (var className in classesData) {{
+    var data = classesData[className];
+
+    var sheet = ss.getSheetByName(className);
+    if (!sheet) {{
+      sheet = ss.insertSheet(className);
+    }}
+    sheet.clear();
+
+    // 헤더
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#e8eaed");
+
+    // 데이터
+    var rows = [];
+    for (var i = 0; i < data.length; i++) {{
+      rows.push([data[i]["번호"], data[i]["이름"], data[i]["수준"], data[i]["세특"], data[i]["바이트"]]);
+    }}
+    if (rows.length > 0) {{
+      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      sheet.getRange(2, 4, rows.length, 1).setWrap(true);
+    }}
+
+    // 보기 좋게 정리
+    sheet.setColumnWidth(1, 50);
+    sheet.setColumnWidth(2, 90);
+    sheet.setColumnWidth(3, 60);
+    sheet.setColumnWidth(4, 600);
+    sheet.setColumnWidth(5, 70);
+    sheet.setFrozenRows(1);
+
+    totalCount += data.length;
   }}
-  if (rows.length > 0) {{
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-  }}
 
-  // 보기 좋게 정리
-  sheet.setColumnWidth(1, 50);
-  sheet.setColumnWidth(2, 90);
-  sheet.setColumnWidth(3, 60);
-  sheet.setColumnWidth(4, 600);
-  sheet.setColumnWidth(5, 70);
-  sheet.getRange(2, 4, rows.length, 1).setWrap(true);
-  sheet.setFrozenRows(1);
-
-  SpreadsheetApp.getUi().alert("세특 " + data.length + "건이 입력되었습니다!");
+  SpreadsheetApp.getUi().alert("반별 시트에 세특 " + totalCount + "건이 입력되었습니다!");
 }}
 '''
     return code
@@ -569,7 +589,8 @@ elif menu == "➕ 새 프로젝트":
         col1, col2 = st.columns(2)
         
         with col1:
-            subject = st.selectbox("교과", ["수학", "국어", "영어", "사회", "과학", "기술가정", "체육", "음악", "미술"])
+            subject = st.selectbox("교과", ["수학", "국어", "영어", "사회", "과학", "기술가정", "체육", "음악", "미술", "기타(직접입력)"])
+            subject_custom = st.text_input("교과명 직접입력 ('기타' 선택 시)", placeholder="예: 정보, 한문, 도덕")
             grade = st.radio("학년", [1, 2, 3], horizontal=True)
         
         with col2:
@@ -592,8 +613,13 @@ elif menu == "➕ 새 프로젝트":
         submitted = st.form_submit_button("✅ 프로젝트 생성", use_container_width=True)
         
         if submitted:
+            # 기타 선택 시 직접입력값 사용
+            final_subject = subject
+            if subject == "기타(직접입력)":
+                final_subject = subject_custom.strip() if subject_custom.strip() else "기타"
+            
             new_project = {
-                "subject": subject,
+                "subject": final_subject,
                 "grade": f"{grade}학년",
                 "classes": f"{num_classes}반",
                 "students_per_class": students_per_class,
@@ -907,6 +933,7 @@ if st.session_state.current_project is not None:
                     if seteuk:
                         results.append({
                             "student": student['name'],
+                            "class": student.get('class', ''),
                             "level": student['level'],
                             "seteuk": seteuk,
                             "bytes": len(seteuk.encode('utf-8'))
