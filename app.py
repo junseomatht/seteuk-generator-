@@ -203,6 +203,56 @@ JSON 형식으로 정리해줘:
         st.error(f"분석 중 오류: {e}")
         return None
 
+def extract_pdf_text(uploaded_file):
+    """업로드된 PDF에서 텍스트 추출"""
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(uploaded_file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        return text.strip()
+    except Exception as e:
+        st.error(f"PDF 읽기 오류: {e}")
+        return ""
+
+
+def analyze_plan_for_units(plan_text):
+    """평가계획서 텍스트에서 단원·활동 목록을 AI로 추출"""
+    client = initialize_claude()
+    if not client:
+        st.error("Claude API 키가 설정되지 않았습니다.")
+        return None
+    
+    prompt = f"""다음은 학교 평가계획서야. 여기서 세특을 작성할 만한 단원과 활동을 뽑아줘.
+
+평가계획서 내용:
+{plan_text[:6000]}
+
+각 단원을 아래 형식의 JSON 배열로만 출력해줘. 다른 설명은 절대 붙이지 마.
+[
+  {{"단원": "소인수분해", "활동": "퍼즐 활동", "평가방법": "수행평가"}},
+  {{"단원": "정수와 유리수", "활동": "", "평가방법": "지필평가"}}
+]"""
+    
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        import json
+        text = message.content[0].text
+        start = text.find('[')
+        end = text.rfind(']') + 1
+        if start != -1 and end > start:
+            return json.loads(text[start:end])
+        return None
+    except Exception as e:
+        st.error(f"분석 오류: {e}")
+        return None
+
+
 def build_apps_script(results, project):
     """구글시트에 세특을 반별 시트로 자동 입력하는 Apps Script 코드 생성"""
     import json
@@ -388,6 +438,16 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             "## 학교 규정",
             f"필수 문체: {school_rules.get('required_style', '자유')}",
             f"금지어: {', '.join(school_rules.get('forbidden_words', []))}",
+        ])
+    
+    # 평가계획서 참고자료 추가
+    plan_text = project.get('plan_text', '').strip()
+    if plan_text:
+        prompt_parts.extend([
+            "",
+            "## 참고자료 (학교 평가계획서 발췌)",
+            "아래는 이 학교의 평가계획서야. 단원의 성격과 평가 맥락을 참고해서 세특을 작성해줘.",
+            plan_text[:2000],
         ])
     
     # 강조 영역 추가
@@ -852,7 +912,43 @@ if st.session_state.current_project is not None:
         # Step 5: 단원 정보
         elif current_step == 5:
             st.markdown("## 📚 5단계: 단원 정보")
-        
+            
+            # 평가계획서 업로드 (선택)
+            with st.expander("📎 평가계획서로 단원 자동 채우기 (선택)", expanded=False):
+                st.info("평가계획서를 올리면 AI가 단원 목록을 뽑아줍니다. **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)")
+                
+                plan_file = st.file_uploader("평가계획서 PDF 업로드", type=["pdf"], key="plan_pdf")
+                
+                if plan_file is not None:
+                    if st.button("🔍 단원 분석하기"):
+                        with st.spinner("평가계획서에서 단원을 추출하는 중..."):
+                            plan_text = extract_pdf_text(plan_file)
+                            if plan_text:
+                                proj['plan_text'] = plan_text  # 참고자료로도 저장
+                                units = analyze_plan_for_units(plan_text)
+                                if units:
+                                    proj['extracted_units'] = units
+                                    st.rerun()
+                
+                # 추출된 단원 목록 표시
+                if proj.get('extracted_units'):
+                    st.markdown("**📋 추출된 단원 (단원명 칸에 넣을 것을 고르세요):**")
+                    for u in proj['extracted_units']:
+                        unit_label = f"{u.get('단원','')}"
+                        if u.get('활동'):
+                            unit_label += f" / {u.get('활동')}"
+                        if u.get('평가방법'):
+                            unit_label += f" ({u.get('평가방법')})"
+                        col_u1, col_u2 = st.columns([4, 1])
+                        with col_u1:
+                            st.write(f"• {unit_label}")
+                        with col_u2:
+                            if st.button("선택", key=f"pick_unit_{u.get('단원','')}"):
+                                proj['unit_name'] = u.get('단원', '')
+                                proj['activity_name'] = u.get('활동', '')
+                                st.rerun()
+                    st.caption("💡 평가계획서 내용은 세특 생성 시 참고자료로도 활용됩니다.")
+            
             col1, col2 = st.columns(2)
             with col1:
                 unit_name = st.text_input("단원명", value=proj.get('unit_name', ''))
