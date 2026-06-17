@@ -951,6 +951,12 @@ if st.session_state.current_project is not None:
                                     proj['extracted_units'] = units
                                     st.rerun()
                 
+                # AI가 읽은 자료 내용 미리보기 (표가 제대로 읽혔는지 확인용)
+                if proj.get('plan_text'):
+                    with st.expander("👀 AI가 읽은 자료 내용 확인하기 (표가 제대로 읽혔는지 점검)"):
+                        st.caption("아래는 AI가 PDF에서 읽어낸 실제 텍스트입니다. 표가 뭉개졌거나 글자가 깨졌으면, 그 부분만 발췌해 직접 정리해서 다시 올리거나 단원명을 직접 입력하세요.")
+                        st.text_area("읽은 내용", value=proj['plan_text'], height=250, disabled=True, key="plan_preview")
+                
                 # 추출된 단원 목록 표시
                 if proj.get('extracted_units'):
                     st.markdown("**📋 추출된 단원 (단원명 칸에 넣을 것을 고르세요):**")
