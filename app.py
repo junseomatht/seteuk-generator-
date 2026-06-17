@@ -654,8 +654,10 @@ elif menu == "➕ 새 프로젝트":
             grade = st.radio("학년", [1, 2, 3], horizontal=True)
         
         with col2:
-            num_classes = st.number_input("반 수", min_value=1, max_value=11, value=5)
-            students_per_class = st.number_input("반당 학생 수", min_value=1, max_value=50, value=30)
+            num_classes = st.number_input("반 수", min_value=1, max_value=11, value=5, step=1,
+                help="입력칸의 +/- 버튼을 쓰거나, 숫자를 전부 지운 뒤 새로 입력하세요")
+            students_per_class = st.number_input("반당 학생 수", min_value=1, max_value=50, value=30, step=1,
+                help="입력칸의 +/- 버튼을 쓰거나, 숫자를 전부 지운 뒤 새로 입력하세요")
         
         st.divider()
         
