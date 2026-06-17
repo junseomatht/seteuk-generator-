@@ -3,3 +3,4 @@ anthropic
 pandas
 scikit-learn
 openpyxl
+pypdf
