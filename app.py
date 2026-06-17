@@ -447,7 +447,7 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             "",
             "## 참고자료 (학교 평가계획서 발췌)",
             "아래는 이 학교의 평가계획서야. 단원의 성격과 평가 맥락을 참고해서 세특을 작성해줘.",
-            plan_text[:2000],
+            plan_text[:3000],
         ])
     
     # 강조 영역 추가
@@ -925,16 +925,26 @@ if st.session_state.current_project is not None:
             st.markdown("## 📚 5단계: 단원 정보")
             
             # 평가계획서 업로드 (선택)
-            with st.expander("📎 평가계획서로 단원 자동 채우기 (선택)", expanded=False):
-                st.info("평가계획서를 올리면 AI가 단원 목록을 뽑아줍니다. **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)")
+            with st.expander("📎 참고자료 올리기 — 평가계획서·교육과정·세특작성지침 등 (선택)", expanded=False):
+                st.info("평가계획서, 교육과정 문서, 세특 작성지침 등을 올리면 AI가 참고해서 세특을 씁니다. 평가계획서의 경우 단원 목록도 자동으로 뽑아줍니다.\n\n📌 **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)")
+                st.warning("⚠️ **비용 절약 안내:** 자료가 길수록 생성 비용이 올라갑니다. 교육과정 총론처럼 수백 페이지짜리 전체를 올리기보다, **필요한 부분(해당 단원, 핵심 지침)만 발췌해서** 올리는 것을 권장합니다. 너무 긴 자료는 앞부분 일부만 반영됩니다.")
                 
-                plan_file = st.file_uploader("평가계획서 PDF 업로드", type=["pdf"], key="plan_pdf")
+                plan_file = st.file_uploader("참고자료 PDF 업로드", type=["pdf"], key="plan_pdf")
                 
                 if plan_file is not None:
-                    if st.button("🔍 단원 분석하기"):
-                        with st.spinner("평가계획서에서 단원을 추출하는 중..."):
+                    if st.button("🔍 자료 분석하기"):
+                        with st.spinner("자료를 읽고 단원을 추출하는 중..."):
                             plan_text = extract_pdf_text(plan_file)
                             if plan_text:
+                                # 비용 보호: 참고자료는 최대 3000자까지만 사용
+                                MAX_CHARS = 3000
+                                original_len = len(plan_text)
+                                if original_len > MAX_CHARS:
+                                    plan_text = plan_text[:MAX_CHARS]
+                                    st.warning(f"📏 자료가 {original_len:,}자로 깁니다. 비용 절약을 위해 **앞부분 {MAX_CHARS:,}자만** 참고자료로 사용합니다. 특정 단원만 반영하려면 그 부분만 발췌해서 다시 올려주세요.")
+                                else:
+                                    st.success(f"✅ 자료 {original_len:,}자를 모두 참고자료로 사용합니다.")
+                                
                                 proj['plan_text'] = plan_text  # 참고자료로도 저장
                                 units = analyze_plan_for_units(plan_text)
                                 if units:
