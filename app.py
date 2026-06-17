@@ -929,24 +929,31 @@ if st.session_state.current_project is not None:
                 st.info("평가계획서, 교육과정 문서, 세특 작성지침 등을 올리면 AI가 참고해서 세특을 씁니다. 평가계획서의 경우 단원 목록도 자동으로 뽑아줍니다.\n\n📌 **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)")
                 st.warning("⚠️ **비용 절약 안내:** 자료가 길수록 생성 비용이 올라갑니다. 교육과정 총론처럼 수백 페이지짜리 전체를 올리기보다, **필요한 부분(해당 단원, 핵심 지침)만 발췌해서** 올리는 것을 권장합니다. 너무 긴 자료는 앞부분 일부만 반영됩니다.")
                 
-                plan_file = st.file_uploader("참고자료 PDF 업로드", type=["pdf"], key="plan_pdf")
+                plan_files = st.file_uploader("참고자료 PDF 업로드 (여러 개 한 번에 가능)", type=["pdf"], key="plan_pdf", accept_multiple_files=True)
                 
-                if plan_file is not None:
+                if plan_files:
                     if st.button("🔍 자료 분석하기"):
                         with st.spinner("자료를 읽고 단원을 추출하는 중..."):
-                            plan_text = extract_pdf_text(plan_file)
-                            if plan_text:
+                            # 여러 파일 텍스트를 모두 합치기
+                            combined_text = ""
+                            for pf in plan_files:
+                                t = extract_pdf_text(pf)
+                                if t:
+                                    combined_text += f"\n\n===== [{pf.name}] =====\n{t}"
+                            combined_text = combined_text.strip()
+                            
+                            if combined_text:
                                 # 비용 보호: 참고자료는 최대 3000자까지만 사용
                                 MAX_CHARS = 3000
-                                original_len = len(plan_text)
+                                original_len = len(combined_text)
                                 if original_len > MAX_CHARS:
-                                    plan_text = plan_text[:MAX_CHARS]
-                                    st.warning(f"📏 자료가 {original_len:,}자로 깁니다. 비용 절약을 위해 **앞부분 {MAX_CHARS:,}자만** 참고자료로 사용합니다. 특정 단원만 반영하려면 그 부분만 발췌해서 다시 올려주세요.")
+                                    combined_text = combined_text[:MAX_CHARS]
+                                    st.warning(f"📏 자료가 총 {original_len:,}자로 깁니다. 비용 절약을 위해 **앞부분 {MAX_CHARS:,}자만** 사용합니다. 특정 단원만 반영하려면 그 부분만 발췌해서 올려주세요.")
                                 else:
-                                    st.success(f"✅ 자료 {original_len:,}자를 모두 참고자료로 사용합니다.")
+                                    st.success(f"✅ 자료 {len(plan_files)}개, 총 {original_len:,}자를 참고자료로 사용합니다.")
                                 
-                                proj['plan_text'] = plan_text  # 참고자료로도 저장
-                                units = analyze_plan_for_units(plan_text)
+                                proj['plan_text'] = combined_text
+                                units = analyze_plan_for_units(combined_text)
                                 if units:
                                     proj['extracted_units'] = units
                                     st.rerun()
@@ -957,36 +964,37 @@ if st.session_state.current_project is not None:
                         st.caption("아래는 AI가 PDF에서 읽어낸 실제 텍스트입니다. 표가 뭉개졌거나 글자가 깨졌으면, 그 부분만 발췌해 직접 정리해서 다시 올리거나 단원명을 직접 입력하세요.")
                         st.text_area("읽은 내용", value=proj['plan_text'], height=250, disabled=True, key="plan_preview")
                 
-                # 추출된 단원 목록 표시
+                # 추출된 단원 목록 (드롭다운으로 선택 - 안정적)
                 if proj.get('extracted_units'):
-                    st.markdown("**📋 추출된 단원 (단원명 칸에 넣을 것을 고르세요):**")
+                    st.markdown("**📋 추출된 단원 — 아래에서 골라 단원명에 넣으세요:**")
+                    unit_options = ["(직접 입력)"]
                     for u in proj['extracted_units']:
-                        unit_label = f"{u.get('단원','')}"
+                        lbl = u.get('단원','')
                         if u.get('활동'):
-                            unit_label += f" / {u.get('활동')}"
+                            lbl += f" / {u.get('활동')}"
                         if u.get('평가방법'):
-                            unit_label += f" ({u.get('평가방법')})"
-                        col_u1, col_u2 = st.columns([4, 1])
-                        with col_u1:
-                            st.write(f"• {unit_label}")
-                        with col_u2:
-                            if st.button("선택", key=f"pick_unit_{u.get('단원','')}"):
-                                st.session_state['unit_name_input'] = u.get('단원', '')
-                                st.session_state['activity_name_input'] = u.get('활동', '')
-                                st.rerun()
-                    st.caption("💡 평가계획서 내용은 세특 생성 시 참고자료로도 활용됩니다.")
+                            lbl += f" ({u.get('평가방법')})"
+                        unit_options.append(lbl)
+                    
+                    picked = st.selectbox("추출된 단원에서 선택", unit_options, key="picked_unit_sel")
+                    if picked != "(직접 입력)":
+                        # 선택한 단원의 원본 정보 찾기
+                        idx = unit_options.index(picked) - 1
+                        sel_unit = proj['extracted_units'][idx]
+                        proj['picked_unit_name'] = sel_unit.get('단원', '')
+                        proj['picked_activity_name'] = sel_unit.get('활동', '')
+                        st.info(f"➡️ 아래 단원명에 '{sel_unit.get('단원','')}' 이(가) 적용됩니다. (단원명 칸에서 수정 가능)")
+                    st.caption("💡 참고자료 내용은 세특 생성 시에도 활용됩니다.")
             
-            # session_state 초기값 설정 (선택 버튼이나 기존 저장값 반영)
-            if 'unit_name_input' not in st.session_state:
-                st.session_state['unit_name_input'] = proj.get('unit_name', '')
-            if 'activity_name_input' not in st.session_state:
-                st.session_state['activity_name_input'] = proj.get('activity_name', '')
+            # 단원명/활동명 기본값: 드롭다운 선택값 > 기존 저장값
+            default_unit = proj.get('picked_unit_name') or proj.get('unit_name', '')
+            default_activity = proj.get('picked_activity_name') or proj.get('activity_name', '')
             
             col1, col2 = st.columns(2)
             with col1:
-                unit_name = st.text_input("단원명", key="unit_name_input")
+                unit_name = st.text_input("단원명", value=default_unit)
             with col2:
-                activity_name = st.text_input("활동명", key="activity_name_input")
+                activity_name = st.text_input("활동명", value=default_activity)
         
             achievement_std = st.text_input("성취기준 (선택)", value=proj.get('achievement_std', ''))
         
