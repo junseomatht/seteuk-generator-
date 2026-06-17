@@ -971,16 +971,22 @@ if st.session_state.current_project is not None:
                             st.write(f"• {unit_label}")
                         with col_u2:
                             if st.button("선택", key=f"pick_unit_{u.get('단원','')}"):
-                                proj['unit_name'] = u.get('단원', '')
-                                proj['activity_name'] = u.get('활동', '')
+                                st.session_state['unit_name_input'] = u.get('단원', '')
+                                st.session_state['activity_name_input'] = u.get('활동', '')
                                 st.rerun()
                     st.caption("💡 평가계획서 내용은 세특 생성 시 참고자료로도 활용됩니다.")
             
+            # session_state 초기값 설정 (선택 버튼이나 기존 저장값 반영)
+            if 'unit_name_input' not in st.session_state:
+                st.session_state['unit_name_input'] = proj.get('unit_name', '')
+            if 'activity_name_input' not in st.session_state:
+                st.session_state['activity_name_input'] = proj.get('activity_name', '')
+            
             col1, col2 = st.columns(2)
             with col1:
-                unit_name = st.text_input("단원명", value=proj.get('unit_name', ''))
+                unit_name = st.text_input("단원명", key="unit_name_input")
             with col2:
-                activity_name = st.text_input("활동명", value=proj.get('activity_name', ''))
+                activity_name = st.text_input("활동명", key="activity_name_input")
         
             achievement_std = st.text_input("성취기준 (선택)", value=proj.get('achievement_std', ''))
         
