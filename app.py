@@ -774,7 +774,16 @@ if st.session_state.current_project is not None:
                 col1.metric("교과", proj['subject'])
                 col2.metric("학년", proj['grade'])
                 col3.metric("반", proj['classes'])
-                col4.metric("학생수", proj['students_per_class'] * proj['classes'].rstrip('반'))
+                # 실제 등록된 학생이 있으면 그 수를, 없으면 반수×반당인원으로 계산
+                if proj.get('students'):
+                    student_count = len(proj['students'])
+                else:
+                    try:
+                        cls_num = int(''.join(filter(str.isdigit, str(proj.get('classes', '0')))))
+                        student_count = proj.get('students_per_class', 0) * cls_num
+                    except:
+                        student_count = 0
+                col4.metric("학생수", student_count)
         
             if st.button("➡️ 다음 단계로"):
                 proj['step'] = 2
