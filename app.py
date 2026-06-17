@@ -518,6 +518,27 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             f"→ 이 학생은 {level}수준이므로 그에 맞는 강도로 서술할 것. 수준에 맞지 않게 과장하지 말 것.",
         ])
     
+    # 학년/학교급에 따른 작성 방식 분기
+    grade_str = str(project.get('grade', ''))
+    school_level = project.get('school_level', '')  # '중학교'/'고등학교'
+    is_middle1 = ('1학년' in grade_str) and (school_level != '고등학교')
+    
+    if is_middle1:
+        prompt_parts.extend([
+            "",
+            "## 작성 방식 (중학교 1학년 기준)",
+            "성취수준 · 주요특성 · 역량을 하나의 틀로 엮어서 서술할 것.",
+            "즉 '어떤 수준에서 어떤 특성을 보였고 그것이 어떤 역량으로 드러났는지'가 자연스럽게 연결되도록 작성.",
+        ])
+    else:
+        prompt_parts.extend([
+            "",
+            "## 작성 방식 (중2~3 · 고등 기준)",
+            "성취기준에 근거하여 담백하고 간결하게 서술할 것. 과한 수식이나 미사여구는 피하고, 학습 활동과 성취를 사실 중심으로 명확하게 기술.",
+        ])
+        if project.get('achievement_std'):
+            prompt_parts.append(f"이 단원 성취기준: {project.get('achievement_std')} — 이 기준에 부합하게 작성할 것.")
+    
     target = project.get('unit_target_bytes') or project.get('target_bytes', 450)
     # 한글 기준 대략 글자 수 (1글자 ≈ 2바이트)
     approx_chars = int(target / 2)
@@ -653,6 +674,8 @@ elif menu == "➕ 새 프로젝트":
         with col1:
             subject = st.selectbox("교과", ["수학", "국어", "영어", "사회", "과학", "기술가정", "체육", "음악", "미술", "기타(직접입력)"])
             subject_custom = st.text_input("교과명 직접입력 ('기타' 선택 시)", placeholder="예: 정보, 한문, 도덕")
+            school_level = st.radio("학교급", ["중학교", "고등학교"], horizontal=True,
+                help="중1은 수준·특성·역량 중심으로, 중2~3·고등은 성취기준 기반으로 담백하게 작성됩니다.")
             grade = st.radio("학년", [1, 2, 3], horizontal=True)
         
         with col2:
@@ -685,7 +708,9 @@ elif menu == "➕ 새 프로젝트":
                 final_subject = subject_custom.strip() if subject_custom.strip() else "기타"
             
             new_project = {
+                "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
                 "subject": final_subject,
+                "school_level": school_level,
                 "grade": f"{grade}학년",
                 "classes": f"{num_classes}반",
                 "students_per_class": students_per_class,
@@ -805,7 +830,8 @@ if st.session_state.current_project is not None:
                 "내 세특 예시 (여러 개면 줄바꿈으로 구분)",
                 value=proj.get('my_examples', ''),
                 height=180,
-                placeholder="예시)\n소인수분해 단원에서 합성수를 소수의 곱으로 표현하는 원리를 정확히 이해하고, 이를 다양한 문제에 능숙하게 적용함. 풀이 과정을 논리적으로 설명하는 태도가 돋보임.\n\n정수와 유리수의 사칙연산에서 음수 개념을 명확히 파악하고, 연산 규칙을 정확하게 적용하여 복잡한 계산도 끝까지 정확히 해결함."
+                placeholder="예시)\n소인수분해 단원에서 합성수를 소수의 곱으로 표현하는 원리를 정확히 이해하고, 이를 다양한 문제에 능숙하게 적용함. 풀이 과정을 논리적으로 설명하는 태도가 돋보임.\n\n정수와 유리수의 사칙연산에서 음수 개념을 명확히 파악하고, 연산 규칙을 정확하게 적용하여 복잡한 계산도 끝까지 정확히 해결함.",
+                key=f"examples_{proj.get('id','')}"
             )
         
             st.markdown("### 📋 2) 내 작성 규칙")
@@ -815,7 +841,8 @@ if st.session_state.current_project is not None:
                 "내 작성 규칙 (자유롭게)",
                 value=proj.get('my_rules', ''),
                 height=120,
-                placeholder="예시)\n- 문장은 '~함' 체로 끝낸다\n- 학업 역량을 먼저 쓰고 태도를 뒤에 쓴다\n- 구체적인 활동 사례를 반드시 하나 포함한다\n- 한 가지 활동을 깊게 서술한다"
+                placeholder="예시)\n- 문장은 '~함' 체로 끝낸다\n- 학업 역량을 먼저 쓰고 태도를 뒤에 쓴다\n- 구체적인 활동 사례를 반드시 하나 포함한다\n- 한 가지 활동을 깊게 서술한다",
+                key=f"rules_{proj.get('id','')}"
             )
         
             proj['my_examples'] = my_examples
@@ -1050,7 +1077,8 @@ if st.session_state.current_project is not None:
                     f"{level} 표현들 (한 줄에 하나씩)",
                     value=proj.get('activity_desc', {}).get(level, ''),
                     height=120,
-                    placeholder=placeholders.get(level, "이 수준 학생에게 쓰는 표현을 한 줄에 하나씩 입력")
+                    placeholder=placeholders.get(level, "이 수준 학생에게 쓰는 표현을 한 줄에 하나씩 입력"),
+                    key=f"pool_{proj.get('id','')}_{level}"
                 )
             
             proj['unit_name'] = unit_name
