@@ -440,13 +440,15 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
             f"금지어: {', '.join(school_rules.get('forbidden_words', []))}",
         ])
     
-    # 평가계획서 참고자료 추가
+    # 참고자료 (평가계획서·교육과정·세특작성요령 등) 추가
     plan_text = project.get('plan_text', '').strip()
     if plan_text:
         prompt_parts.extend([
             "",
-            "## 참고자료 (학교 평가계획서 발췌)",
-            "아래는 이 학교의 평가계획서야. 단원의 성격과 평가 맥락을 참고해서 세특을 작성해줘.",
+            "## ★★ 반드시 따라야 할 학교 자료 (평가계획서·교육과정·세특작성요령 등)",
+            "아래는 이 학교가 제공한 공식 자료야. 세특을 작성할 때 이 자료의 내용·방향·지침을 반드시 지키고, 위배되지 않게 작성해줘.",
+            "특히 세특 작성요령이나 지침이 포함되어 있으면 그 규칙을 최우선으로 따를 것.",
+            "",
             plan_text[:3000],
         ])
     
@@ -670,7 +672,9 @@ elif menu == "➕ 새 프로젝트":
         st.divider()
         
         st.markdown("### 성취수준 선택")
-        num_levels = st.radio("성취수준 개수", [3, 5], horizontal=True)
+        num_levels = st.radio("성취수준 개수", [3, 5], horizontal=True,
+            help="학교에서 쓰는 성취수준 단계 수에 맞추세요. 'A·B·C·D·E'처럼 5단계면 5, '상·중·하'처럼 3단계면 3을 선택합니다.")
+        st.caption("💡 A~E(매우우수·우수·보통·기초·불충분)면 **5개**, 상·중·하면 **3개**를 선택하세요.")
         
         submitted = st.form_submit_button("✅ 프로젝트 생성", use_container_width=True)
         
@@ -836,6 +840,7 @@ if st.session_state.current_project is not None:
                 )
         
             with st.expander("금지어 설정", expanded=True):
+                st.caption("🚫 여기 넣은 단어는 세특에 절대 들어가지 않습니다. NEIS 기재 금지어(예: '선행학습')나 감사 때 지적받을 수 있는 표현, 평소 쓰기 꺼려지는 표현을 막아 두면, 검토 시간이 줄고 안심할 수 있습니다.")
                 forbidden_words = st.multiselect(
                     "금지어 선택",
                     ["선행학습", "천재적", "타고난", "의대 수준", "대학 과정", 
@@ -848,6 +853,7 @@ if st.session_state.current_project is not None:
                     forbidden_words.append(custom_word)
         
             with st.expander("강조 영역 (선택)", expanded=False):
+                st.caption("⭐ 선택한 영역이 세특에 잘 드러나도록 AI가 신경 써서 작성합니다. 예를 들어 '협업'을 고르면 모둠 활동에서의 협력 모습이, '창의성'을 고르면 새로운 접근이 부각됩니다. 학교가 올해 강조하는 역량이 있으면 골라 두세요.")
                 emphasis = st.multiselect(
                     "강조할 영역",
                     ["인성", "창의성", "협업", "도전정신", "학습습관"]
@@ -871,6 +877,17 @@ if st.session_state.current_project is not None:
         
             st.markdown("### CSV 파일 업로드")
             st.info("형식: 번호, 이름, 반, 수준, 주요특성, 부수특성")
+            
+            # 양식 다운로드 버튼
+            sample_csv = "번호,이름,반,수준,주요특성,부수특성\n1,홍길동,1반,A,발표력,협업;창의성\n2,김영희,1반,B,탐구심,질문;논리력\n3,이순신,1반,C,성실성,노력;집중력\n"
+            st.download_button(
+                label="📥 빈 양식(CSV) 다운로드",
+                data=sample_csv.encode('utf-8-sig'),
+                file_name="학생명단_양식.csv",
+                mime="text/csv",
+                help="이 양식을 받아 엑셀로 열고, 예시 줄을 우리 반 학생으로 바꿔 저장한 뒤 업로드하세요."
+            )
+            st.caption("💡 양식을 받아 엑셀에서 학생 정보만 바꿔 저장 → 다시 업로드하면 됩니다. (부수특성이 여러 개면 세미콜론 ; 으로 구분)")
         
             uploaded_file = st.file_uploader("CSV 파일 선택", type=["csv"])
         
@@ -925,8 +942,13 @@ if st.session_state.current_project is not None:
             st.markdown("## 📚 5단계: 단원 정보")
             
             # 평가계획서 업로드 (선택)
-            with st.expander("📎 참고자료 올리기 — 평가계획서·교육과정·세특작성지침 등 (선택)", expanded=False):
-                st.info("평가계획서, 교육과정 문서, 세특 작성지침 등을 올리면 AI가 참고해서 세특을 씁니다. 평가계획서의 경우 단원 목록도 자동으로 뽑아줍니다.\n\n📌 **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)")
+            with st.expander("📎 참고자료 올리기 — 평가계획서·교육과정·세특작성요령 등 (선택)", expanded=False):
+                st.info("""올린 자료는 **두 가지로 활용**됩니다:
+
+**①** 평가계획서를 분석해 **단원 목록**을 자동으로 뽑아줍니다.
+**②** 세특작성요령·교육과정 등의 자료는 AI가 세특을 쓸 때 **반드시 지켜야 할 지침**으로 반영합니다. (자료에 어긋나지 않게 작성)
+
+📌 **한글 파일은 PDF로 저장해서 올려주세요.** (한글에서 다른 이름으로 저장 → PDF 선택)""")
                 st.warning("⚠️ **비용 절약 안내:** 자료가 길수록 생성 비용이 올라갑니다. 교육과정 총론처럼 수백 페이지짜리 전체를 올리기보다, **필요한 부분(해당 단원, 핵심 지침)만 발췌해서** 올리는 것을 권장합니다. 너무 긴 자료는 앞부분 일부만 반영됩니다.")
                 
                 plan_files = st.file_uploader("참고자료 PDF 업로드 (여러 개 한 번에 가능)", type=["pdf"], key="plan_pdf", accept_multiple_files=True)
@@ -963,6 +985,10 @@ if st.session_state.current_project is not None:
                     with st.expander("👀 AI가 읽은 자료 내용 확인하기 (표가 제대로 읽혔는지 점검)"):
                         st.caption("아래는 AI가 PDF에서 읽어낸 실제 텍스트입니다. 표가 뭉개졌거나 글자가 깨졌으면, 그 부분만 발췌해 직접 정리해서 다시 올리거나 단원명을 직접 입력하세요.")
                         st.text_area("읽은 내용", value=proj['plan_text'], height=250, disabled=True, key="plan_preview")
+                
+                # 자료가 등록되면 지침 반영 상태 표시
+                if proj.get('plan_text'):
+                    st.success("✅ 이 자료는 세특 작성 시 **지침으로 반영**됩니다. (자료에 어긋나지 않게 AI가 작성)")
                 
                 # 추출된 단원 목록 (드롭다운으로 선택 - 안정적)
                 if proj.get('extracted_units'):
@@ -1048,6 +1074,8 @@ if st.session_state.current_project is not None:
                 col2.metric("작성방식", "등록됨" if (proj.get('my_examples','').strip() or proj.get('my_rules','').strip()) else "기본")
                 col3.metric("규정", "설정됨" if proj.get('school_rules') else "미설정")
                 col4.metric("목표", f"{proj.get('unit_target_bytes') or proj.get('target_bytes')}B")
+                if proj.get('plan_text'):
+                    st.success("📎 학교 자료(평가계획서·작성요령 등)가 세특 작성 지침으로 반영됩니다.")
         
             if st.button("🎯 세특 생성 시작", use_container_width=True):
                 st.markdown("### ⏳ 생성 중...")
