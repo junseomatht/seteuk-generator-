@@ -398,8 +398,11 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
         return None
     
     # 프롬프트 구성
+    subject = project.get('subject', '')
+    school_level = project.get('school_level', '중학교')
     prompt_parts = [
-        "너는 한국 중학교의 우수한 세특 작성자야.",
+        f"너는 한국 {school_level}의 우수한 '{subject}' 교과 세특 작성자야.",
+        f"★★★ 이 세특은 반드시 '{subject}' 교과에 대한 것이어야 해. {subject} 교과의 학습 활동·역량·성취만 다루고, 다른 교과(수학·국어 등) 내용은 절대 쓰지 마. 단원명이나 예시가 모호해도 반드시 {subject} 교과 맥락으로 작성할 것.",
         "",
         "## 지침",
         "1. 구체적이고 긍정적인 표현 사용",
@@ -465,7 +468,7 @@ def generate_seteuk(project, style_profile=None, school_rules=None, student_info
     if unit_name or activity_name or achievement_std:
         prompt_parts.extend([
             "",
-            "## 단원 및 활동 정보",
+            f"## {subject} 교과의 단원 및 활동 정보",
         ])
         if unit_name:
             prompt_parts.append(f"단원: {unit_name}")
